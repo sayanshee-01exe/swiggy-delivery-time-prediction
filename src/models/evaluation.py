@@ -60,14 +60,22 @@ def load_model(model_path: Path):
     return model
 
 
-def save_model_info(save_json_path,run_id, artifact_path, model_name):
+def save_model_info(
+    save_json_path,
+    run_id,
+    model_uri,
+    model_id,
+    registered_model_name
+):
     info_dict = {
         "run_id": run_id,
-        "artifact_path": artifact_path,
-        "model_name": model_name
+        "model_uri": model_uri,
+        "model_id": model_id,
+        "registered_model_name": registered_model_name
     }
-    with open(save_json_path,"w") as f:
-        json.dump(info_dict,f,indent=4)
+
+    with open(save_json_path, "w") as f:
+        json.dump(info_dict, f, indent=4)
 
 
 if __name__ == "__main__":
@@ -157,15 +165,17 @@ if __name__ == "__main__":
         # log the final model
         # mlflow.sklearn.log_model(model,"delivery_time_pred_model",signature=model_signature)
         # log the final model
-        mlflow.sklearn.log_model(sk_model=model,
-                                  name="delivery_time_pred_model",
-                                  signature=model_signature,
-                                  skops_trusted_types=[
+        logged_model = mlflow.sklearn.log_model(
+        sk_model=model,
+        name="delivery_time_pred_model",
+        signature=model_signature,
+        skops_trusted_types=[
         "collections.OrderedDict",
         "lightgbm.basic.Booster",
         "lightgbm.sklearn.LGBMRegressor",
         "sklearn.utils._bunch.Bunch",
-    ],)
+    ],
+)
 
         # log stacking regressor
         mlflow.log_artifact(root_path / "models" / "stacking_regressor.joblib")
@@ -177,23 +187,47 @@ if __name__ == "__main__":
         mlflow.log_artifact(root_path / "models" / "preprocessor.joblib")
         
         # get the current run artifact uri
-        artifact_uri = mlflow.get_artifact_uri()
+        # artifact_uri = mlflow.get_artifact_uri()
         
         logger.info("Mlflow logging complete and model logged")
         
     # get the run id 
+    # run_id = run.info.run_id
+    # model_name = "delivery_time_pred_model"
+    
+    # # save the model info
+    # save_json_path = root_path / "run_information.json"
+    # save_model_info(save_json_path=save_json_path,
+    #                 run_id=run_id,
+    #                 artifact_path=artifact_uri,
+    #                 model_name=model_name)
+    # logger.info("Model Information saved")
+    
     run_id = run.info.run_id
-    model_name = "delivery_time_pred_model"
-    
-    # save the model info
+
     save_json_path = root_path / "run_information.json"
-    save_model_info(save_json_path=save_json_path,
-                    run_id=run_id,
-                    artifact_path=artifact_uri,
-                    model_name=model_name)
+
+    save_model_info(
+     save_json_path=save_json_path,
+     run_id=run_id,
+     model_uri=logged_model.model_uri,
+     model_id=logged_model.model_id,
+     registered_model_name="swiggy-delivery-time-model"
+)
+
     logger.info("Model Information saved")
-    
-    
-    
+    run_id = run.info.run_id
+
+    save_json_path = root_path / "run_information.json"
+
+    save_model_info(
+        save_json_path=save_json_path,
+        run_id=run_id,
+        model_uri=logged_model.model_uri,
+        model_id=logged_model.model_id,
+        registered_model_name="swiggy-delivery-time-model"
+    )
+
+logger.info("Model Information saved")
     
     
