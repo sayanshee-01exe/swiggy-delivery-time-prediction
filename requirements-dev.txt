@@ -6,3 +6,4 @@ mlflow
 joblib
 dagshub
 lightgbm
+dvc[s3]
