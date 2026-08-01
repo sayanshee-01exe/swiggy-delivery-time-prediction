@@ -7,3 +7,4 @@ joblib
 dagshub
 lightgbm
 dvc[s3]
+pytest
