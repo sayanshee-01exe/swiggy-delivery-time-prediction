@@ -7,36 +7,62 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # -------------------------
+      # Checkout
+      # -------------------------
       - name: Code Checkout
         uses: actions/checkout@v4
 
+
+      # -------------------------
+      # Python setup
+      # -------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
+
+      # -------------------------
+      # Dependencies
+      # -------------------------
       - name: Install Packages
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Configure AWS Credentials
+
+      # -------------------------
+      # AWS credentials
+      # DVC + ECR are in Sydney
+      # -------------------------
+      - name: Configure AWS Credentials for ECR and DVC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
 
+
+      # -------------------------
+      # Get DVC artifacts
+      # -------------------------
       - name: DVC Pull
         run: |
           dvc pull
 
+
+      # -------------------------
+      # ML tests
+      # -------------------------
       - name: Test Model Registry
         env:
           DAGSHUB_USER_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
         run: |
           pytest tests/test_model_registry.py
+
 
       - name: Test Model Performance
         env:
@@ -44,6 +70,10 @@ jobs:
         run: |
           pytest tests/test_model_perf.py
 
+
+      # -------------------------
+      # Promote model
+      # -------------------------
       - name: Promote Model
         if: success()
         env:
@@ -51,11 +81,20 @@ jobs:
         run: |
           python scripts/promote_model_to_prod.py
 
+
+      # -------------------------
+      # ECR Login
+      # ECR = ap-southeast-2
+      # -------------------------
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push docker image to Amazon ECR
+
+      # -------------------------
+      # Build + Push Docker image
+      # -------------------------
+      - name: Build, tag, and push Docker image to Amazon ECR
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
@@ -63,3 +102,53 @@ jobs:
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+
+      # -------------------------
+      # Create CodeDeploy bundle
+      # -------------------------
+      - name: Zip files for deployment
+        if: success()
+        run: |
+          zip -r deployment.zip \
+            appspec.yml \
+            deploy/scripts/install_dependencies.sh \
+            deploy/scripts/start_docker.sh
+
+
+      # -------------------------
+      # Switch region:
+      # CodeDeploy + deployment S3
+      # are in us-east-1
+      # -------------------------
+      - name: Configure AWS Credentials for CodeDeploy
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+
+      # -------------------------
+      # Upload deployment bundle
+      # -------------------------
+      - name: Upload ZIP to S3
+        if: success()
+        run: |
+          aws s3 cp deployment.zip \
+            s3://deliverytimepredictdeployment/deployment.zip
+
+
+      # -------------------------
+      # CodeDeploy
+      # -------------------------
+      - name: Deploy to AWS CodeDeploy
+        if: success()
+        run: |
+          aws deploy create-deployment \
+            --application-name deliverytimepred \
+            --deployment-config-name CodeDeployDefault.OneAtATime \
+            --deployment-group-name deliverytimepreddeploymentgrp \
+            --s3-location bucket=deliverytimepredictdeployment,key=deployment.zip,bundleType=zip \
+            --file-exists-behavior OVERWRITE \
+            --region us-east-1
