@@ -1,9 +1,28 @@
 import { useState } from 'react';
 import PredictionForm from './components/PredictionForm';
+import ResultCard from './components/ResultCard';
+import { predict } from './api';
 import { DEFAULT_ORDER } from './constants';
 
 export default function App() {
   const [order, setOrder] = useState(DEFAULT_ORDER);
+  const [minutes, setMinutes] = useState(null);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { prediction_minutes } = await predict(order);
+      setMinutes(prediction_minutes);
+    } catch (err) {
+      setError(err.message);
+      setMinutes(null);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -22,9 +41,21 @@ export default function App() {
         <PredictionForm
           values={order}
           onChange={setOrder}
-          onSubmit={() => {}}
-          busy={false}
+          onSubmit={onSubmit}
+          busy={busy}
         />
+
+        {error && (
+          <p
+            data-testid="error-message"
+            role="alert"
+            className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            {error}
+          </p>
+        )}
+
+        {minutes !== null && !error && <ResultCard minutes={minutes} />}
       </main>
     </div>
   );

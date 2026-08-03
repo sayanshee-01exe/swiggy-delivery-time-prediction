@@ -31,10 +31,11 @@
   - Notes: `city_type` option value is `metropolitian` (dataset spelling), not `metropolitan`
   - Completed: 2026-08-03 — 13 controls (the PRD's field table has more than the 10 estimated here). 18 e2e tests assert each select's options equal the accepted values exactly and each number input's min/max mirrors the pydantic bounds, so the two cannot drift. Layout verified by bounding box: side by side at 1280px, stacked at 360px. semgrep 0 findings, npm audit 0 vulnerabilities.
 
-- [ ] Task 6: Wire form submission to the API and render the result card (P0)
+- [x] Task 6: Wire form submission to the API and render the result card (P0)
   - Acceptance: submitting POSTs to `/api/predict` and shows the predicted minutes; button disables and shows a spinner while in flight; a failed request shows the server's error text instead of a blank screen
-  - Files: frontend/src/api.js, frontend/src/components/ResultCard.jsx, frontend/src/App.jsx, frontend/vite.config.js (dev proxy `/api` → `http://localhost:8001`)
+  - Files: frontend/src/api.js, frontend/src/components/ResultCard.jsx, frontend/src/App.jsx, frontend/vite.config.js (dev proxy `/api` → `http://localhost:8001`), frontend/tests/e2e/predict.spec.js
   - Notes: in production the API is same-origin, so fetch `/api/predict` relative — do not hardcode a host
+  - Completed: 2026-08-03 — 7 e2e tests covering success, in-flight disable, 503, 422 field messages, network abort and error-clearing. `api.js` translates pydantic's 422 list into readable `field: message` text and converts a fetch rejection into a sentence rather than "TypeError: Failed to fetch". Verified beyond the mocks against the real backend through the Vite proxy: 14.2 min clear vs 31.1 min stormy/jam/festival, and a live browser run rendering 21 minutes on both desktop and mobile. semgrep 0 findings, npm audit 0 vulnerabilities.
 
 - [ ] Task 7: Provision the S3 bucket and CloudFront distribution with two origins (P0)
   - Acceptance: the CloudFront domain serves the React app over HTTPS, and `curl https://<domain>/api/health` returns the health JSON from EC2
