@@ -117,6 +117,25 @@ export const DEFAULT_ORDER = {
   multiple_deliveries: 1,
 };
 
+// A deliberately "interesting" order for the Try an example button: a long
+// trip in bad conditions, so the prediction differs visibly from the default.
+// Every value here must stay inside the API bounds above.
+export const EXAMPLE_ORDER = {
+  distance_km: 16.2,
+  age: 35,
+  ratings: 4.2,
+  pickup_minutes: 18,
+  order_hour: 20,
+  weather: 'stormy',
+  traffic: 'jam',
+  type_of_order: 'meal',
+  type_of_vehicle: 'scooter',
+  city_type: 'urban',
+  festival: 'yes',
+  vehicle_condition: 1,
+  multiple_deliveries: 2,
+};
+
 // Replaces underscores so option values render as readable labels while the
 // submitted value stays exactly what the encoder expects.
 export const humanize = (value) =>

@@ -47,10 +47,11 @@
   - Files: .github/workflows/ci_cd.yaml
   - Notes: add `actions/setup-node@v4` (Node 20), then `npm ci && npm run build` in `frontend/`, `aws s3 sync frontend/dist s3://<bucket> --delete`, `aws cloudfront create-invalidation --paths "/*"`. Run these in the `us-east-1` credential block; add `CLOUDFRONT_DISTRIBUTION_ID` and `SPA_BUCKET` as repo secrets
 
-- [ ] Task 9: Add the health badge and "Try an example" button (P1)
+- [x] Task 9: Add the health badge and "Try an example" button (P1)
   - Acceptance: on load the page calls `/api/health` and shows a green "Live" or red "Unavailable" badge; clicking "Try an example" fills every field with a valid sample order that predicts successfully
-  - Files: frontend/src/components/HealthBadge.jsx, frontend/src/constants.js, frontend/src/App.jsx
+  - Files: frontend/src/components/HealthBadge.jsx, frontend/src/constants.js, frontend/src/App.jsx, frontend/tests/e2e/health-and-example.spec.js
   - Notes: the model is pulled from DagsHub at container startup, so a red badge is a genuine and likely failure mode worth surfacing
+  - Completed: 2026-08-03 — 6 e2e tests. The badge has four states, not two: "unreachable" (amber) is kept distinct from "degraded" (red) because "API down" and "API up, model down" need different messages — exactly the split `/api/health` returning 200-on-degraded was designed for. A test asserts the health check never gates the form, so a slow check cannot block a prediction. The example order is asserted to sit inside every API bound. semgrep 0 findings, npm audit 0 vulnerabilities.
 
 - [ ] Task 10: Add session prediction history (P1)
   - Acceptance: each successful prediction prepends a row showing distance, traffic, weather and predicted minutes; the list keeps the last 5 and clears on reload
