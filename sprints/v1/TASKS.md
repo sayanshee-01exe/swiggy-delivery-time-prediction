@@ -13,10 +13,11 @@
   - Notes: restaurant fixed at (22.745049, 75.892471); `delivery_lat = 22.745049 + distance_km / 111.19492664`, longitude unchanged. `Weatherconditions` must be sent as `"conditions {Weather}"`. Bounds: distance 0<d≤25.0, age≥18, ratings 1.0–5.0, pickup 1–60
   - Completed: 2026-08-03 — 65 unit tests green. Two bounds came out tighter than the PRD assumed: `type_of_vehicle` drops `bicycle` and `order_hour` starts at 7, because the fitted encoder (`handle_unknown="ignore"`) would silently zero-encode `bicycle` and `after_midnight` rather than erroring. Added a test that asserts every offered label exists in the fitted encoder so this cannot regress. semgrep 290 rules / 0 findings.
 
-- [ ] Task 3: Add `GET /api/health` and `POST /api/predict` to the FastAPI app (P0)
+- [x] Task 3: Add `GET /api/health` and `POST /api/predict` to the FastAPI app (P0)
   - Acceptance: `/api/health` returns `{"status":"ok","model_loaded":true,"model_name":...}`; `POST /api/predict` with simplified JSON returns `{"prediction_minutes": <float>}`; an empty cleaned frame returns 400 with a readable message; existing `POST /predict` still works
-  - Files: app.py
+  - Files: app.py, tests/integration/test_api.py (new)
   - Notes: paths must literally start with `/api/` so the CloudFront behavior maps 1:1 with no origin-path rewriting
+  - Completed: 2026-08-03 — 18 integration tests green (83 total). Model loading moved out of import time into a `lifespan` startup hook that records failures instead of raising; this was required by the acceptance criteria, since the old code died on a failed registry load and could never have served `model_loaded: false`. Import dropped from 46s (network) to 1s (none), and tests now run offline against the local artifacts. `/predict` refactored onto the shared `predict_minutes()` helper and still passes. semgrep 290 rules / 0 findings.
 
 - [ ] Task 4: Move the service from port 8000 to port 8001 (P0)
   - Acceptance: `docker build` + `docker run -p 8001:8001` serves `/api/health` on :8001; nothing in the repo still binds 8000

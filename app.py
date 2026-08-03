@@ -157,7 +157,10 @@
 
 # raw, dirty data
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sklearn.pipeline import Pipeline
 import uvicorn
@@ -165,24 +168,21 @@ import pandas as pd
 import mlflow
 import json
 import joblib
-from mlflow import MlflowClient
+import dagshub
 from sklearn import set_config
 from scripts.data_clean_utils import perform_data_cleaning
-from fastapi import FastAPI, HTTPException
+from scripts.api_payload import SimplifiedOrder, build_raw_payload
 
 # set the output as pandas
 set_config(transform_output='pandas')
 
-# initialize dagshub
-import dagshub
-import mlflow.client
-
-dagshub.init(repo_owner='sayanshee-01exe', 
-             repo_name='swiggy-delivery-time-prediction', 
-             mlflow=True)
-
-# set the mlflow tracking server
-mlflow.set_tracking_uri("https://dagshub.com/sayanshee-01exe/swiggy-delivery-time-prediction.mlflow")
+ROOT = Path(__file__).parent
+DAGSHUB_REPO_OWNER = 'sayanshee-01exe'
+DAGSHUB_REPO_NAME = 'swiggy-delivery-time-prediction'
+TRACKING_URI = (
+    f"https://dagshub.com/{DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}.mlflow"
+)
+PORT = 8000
 
 
 class Data(BaseModel):  
@@ -237,36 +237,86 @@ nominal_cat_cols = ['weather',
 
 ordinal_cat_cols = ["traffic","distance_type"]
 
-# mlflow client
-client = MlflowClient()
+# Model state is populated on startup rather than at import time.  Loading
+# pulls from the DagsHub registry over the network, and doing that at import
+# means a registry outage kills the process before it can serve anything --
+# including the health endpoint that is supposed to report the problem.
+MODEL = {"pipeline": None, "name": None, "error": None}
 
-# load model information
-run_info = load_model_information("run_information.json")
 
-# registered model name
-model_name = run_info["registered_model_name"]
+def load_model_from_registry():
+    """Build the serving pipeline from the DagsHub MLflow registry."""
+    dagshub.init(repo_owner=DAGSHUB_REPO_OWNER,
+                 repo_name=DAGSHUB_REPO_NAME,
+                 mlflow=True)
+    mlflow.set_tracking_uri(TRACKING_URI)
 
-# model alias
-alias = "candidate"
+    run_info = load_model_information(ROOT / "run_information.json")
+    model_name = run_info["registered_model_name"]
+    alias = "candidate"
 
-# model registry path
-model_path = f"models:/{model_name}@{alias}"
+    model = mlflow.sklearn.load_model(f"models:/{model_name}@{alias}")
+    preprocessor = load_transformer(ROOT / "models" / "preprocessor.joblib")
 
-# load model from registry
-model = mlflow.sklearn.load_model(model_path)
+    pipeline = Pipeline(steps=[
+        ('preprocess', preprocessor),
+        ("regressor", model)
+    ])
+    return pipeline, model_name
 
-# load the preprocessor
-preprocessor_path = "models/preprocessor.joblib"
-preprocessor = load_transformer(preprocessor_path)
 
-# build the model pipeline
-model_pipe = Pipeline(steps=[
-    ('preprocess',preprocessor),
-    ("regressor",model)
-])
+def load_model(loader=None):
+    """Attempt to load the model, recording the failure instead of raising.
+
+    ``loader`` is injectable so tests can supply local artifacts.
+    """
+    loader = loader or load_model_from_registry
+    try:
+        pipeline, name = loader()
+        MODEL.update(pipeline=pipeline, name=name, error=None)
+    except Exception as exc:  # noqa: BLE001 - surfaced via /api/health
+        MODEL.update(pipeline=None, name=None,
+                     error=f"{type(exc).__name__}: {exc}")
+    return MODEL
+
+
+def get_pipeline():
+    """Return the serving pipeline, or 503 if it never loaded."""
+    if MODEL["pipeline"] is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is unavailable; the service failed to load it "
+                   "from the registry."
+        )
+    return MODEL["pipeline"]
+
+
+def predict_minutes(raw_payload: dict) -> float:
+    """Clean one raw record and run it through the pipeline."""
+    pipeline = get_pipeline()
+    cleaned = perform_data_cleaning(pd.DataFrame(raw_payload, index=[0]))
+
+    # the cleaner ends in .dropna(), so anything it cannot parse silently
+    # yields an empty frame rather than an error
+    if cleaned.empty:
+        raise HTTPException(
+            status_code=400,
+            detail="Input row is invalid after data cleaning"
+        )
+
+    return float(pipeline.predict(cleaned)[0])
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # idempotent: a pipeline injected before startup (tests) is left alone
+    if MODEL["pipeline"] is None:
+        load_model()
+    yield
+
 
 # create the app
-app = FastAPI()
+app = FastAPI(title="Swiggy Delivery Time Prediction", lifespan=lifespan)
 
 # create the home endpoint
 @app.get(path="/")
@@ -298,17 +348,37 @@ def do_predictions(data: Data):
         'City': data.City
         },index=[0]
     )
-    cleaned_data = perform_data_cleaning(pred_data)
+    return {"prediction": predict_minutes(pred_data.to_dict(orient="records")[0])}
 
-    if cleaned_data.empty:
-        raise HTTPException(
-        status_code=400,
-        detail="Input row is invalid after data cleaning"
-    )
 
-    predictions = model_pipe.predict(cleaned_data)[0]
+# ---------------------------------------------------------------------------
+# /api surface consumed by the web frontend
+#
+# These paths deliberately start with "/api/" so a single CloudFront behaviour
+# can forward them to this origin with no path rewriting.
+# ---------------------------------------------------------------------------
 
-    return {"prediction": predictions}
+@app.get("/api/health")
+def health():
+    """Liveness plus model readiness.
+
+    Always returns 200 so the UI can distinguish "API up, model down" from a
+    network failure -- those are different states and deserve different
+    messages.
+    """
+    return {
+        "status": "ok" if MODEL["pipeline"] is not None else "degraded",
+        "model_loaded": MODEL["pipeline"] is not None,
+        "model_name": MODEL["name"],
+        "error": MODEL["error"],
+    }
+
+
+@app.post("/api/predict")
+def predict_simplified(order: SimplifiedOrder):
+    """Predict from the ~10 human-friendly fields the web form collects."""
+    return {"prediction_minutes": predict_minutes(build_raw_payload(order))}
+
 
 if __name__ == "__main__":
-    uvicorn.run(app="app:app",host="0.0.0.0",port=8000)
+    uvicorn.run(app="app:app", host="0.0.0.0", port=PORT)
