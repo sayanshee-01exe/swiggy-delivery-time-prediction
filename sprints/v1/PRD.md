@@ -128,9 +128,30 @@ Pydantic **and** in the form inputs:
 | Field | Bound | What happens outside it |
 | --- | --- | --- |
 | `distance_km` | `0 < d ≤ 25.0` | `25.01` and above → `distance_type` is NaN → row dropped |
-| `age` | `≥ 18` | `17` is explicitly dropped as a minor rider |
+| `age` | `18 – 65` | `17` is explicitly dropped as a minor rider |
 | `ratings` | `1.0 – 5.0` | the literal string `"6"` is explicitly dropped |
 | `pickup_minutes` | `1 – 60` | negative/absurd values distort `pickup_time_minutes` |
+| `order_hour` | `7 – 23` | see below — hour `0` is dropped, hours `1–6` are silently mis-encoded |
+
+### The encoder's known categories are narrower than the dataset's
+
+Discovered while building Task 2, and the reason two of the ranges above are tighter than
+expected. The fitted `preprocessor.joblib` nominal encoder uses `handle_unknown="ignore"`, so a
+label it was never fitted on **does not raise** — it becomes an all-zero vector and quietly
+degrades the prediction. Two values fall into that trap:
+
+| Value | Status | Consequence |
+| --- | --- | --- |
+| `type_of_vehicle = "bicycle"` | in the raw dataset, **absent** from the fitted encoder | silently zero-encoded |
+| `order_time_of_day = "after_midnight"` | produced by hours `1–6`, **absent** from the encoder | silently zero-encoded |
+
+Both are therefore excluded from the accepted input: `bicycle` is not offered, and `order_hour`
+starts at `7` (the first hour in the `morning` bin). Hour `0` is separately invalid — the
+`time_of_day` bins are `[0, 6, 12, 17, 20, 24]` with `right=True`, so midnight lands on the
+excluded left edge and becomes NaN.
+
+`tests/unit/test_api_payload.py` asserts every offered label exists in the fitted encoder's
+categories, so this cannot silently regress if the model is retrained.
 
 ### Frontend field → model feature mapping
 
@@ -151,14 +172,17 @@ Pydantic **and** in the form inputs:
 
 ### Categorical values the model expects (post-cleaning, lowercased)
 
+All values below are verified present in the fitted `preprocessor.joblib`:
+
 - **weather**: sunny, stormy, sandstorms, cloudy, fog, windy
 - **traffic**: low, medium, high, jam
 - **type_of_order**: snack, meal, drinks, buffet
-- **type_of_vehicle**: motorcycle, scooter, electric_scooter, bicycle
+- **type_of_vehicle**: motorcycle, scooter, electric_scooter  *(no bicycle — see above)*
 - **city_type**: metropolitian, urban, semi-urban  *(note the dataset's spelling)*
 - **festival**: yes, no
 - **vehicle_condition**: 0, 1, 2, 3
 - **multiple_deliveries**: 0, 1, 2, 3
+- **order_hour**: 7–23  *(hours 1–6 are unsupported by the model — see above)*
 
 ## Out of Scope (v2+)
 

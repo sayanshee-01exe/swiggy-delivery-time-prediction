@@ -7,10 +7,11 @@
   - Files: frontend/package.json, frontend/vite.config.js, frontend/index.html, frontend/src/main.jsx, frontend/src/App.jsx, frontend/src/index.css, .gitignore (add `frontend/node_modules`, `frontend/dist`)
   - Completed: 2026-08-03 — React 18 + Vite 6 + Tailwind v4 (via `@tailwindcss/vite`, no config file needed). Playwright set up with a dev-server harness. 3 E2E tests green; build emits `dist/` with a 7.86 kB compiled stylesheet. semgrep 0 findings, npm audit 0 vulnerabilities.
 
-- [ ] Task 2: Add the simplified request schema and raw-payload builder (P0)
+- [x] Task 2: Add the simplified request schema and raw-payload builder (P0)
   - Acceptance: `build_raw_payload(SimplifiedOrder(distance_km=7.5, ...))` returns a 19-key dict; feeding it through `perform_data_cleaning()` yields a non-empty frame whose `distance` equals 7.5000. Pydantic rejects `distance_km=25.1`, `age=17`, `ratings=6`
-  - Files: scripts/api_payload.py (new)
+  - Files: scripts/api_payload.py (new), tests/unit/test_api_payload.py (new)
   - Notes: restaurant fixed at (22.745049, 75.892471); `delivery_lat = 22.745049 + distance_km / 111.19492664`, longitude unchanged. `Weatherconditions` must be sent as `"conditions {Weather}"`. Bounds: distance 0<d≤25.0, age≥18, ratings 1.0–5.0, pickup 1–60
+  - Completed: 2026-08-03 — 65 unit tests green. Two bounds came out tighter than the PRD assumed: `type_of_vehicle` drops `bicycle` and `order_hour` starts at 7, because the fitted encoder (`handle_unknown="ignore"`) would silently zero-encode `bicycle` and `after_midnight` rather than erroring. Added a test that asserts every offered label exists in the fitted encoder so this cannot regress. semgrep 290 rules / 0 findings.
 
 - [ ] Task 3: Add `GET /api/health` and `POST /api/predict` to the FastAPI app (P0)
   - Acceptance: `/api/health` returns `{"status":"ok","model_loaded":true,"model_name":...}`; `POST /api/predict` with simplified JSON returns `{"prediction_minutes": <float>}`; an empty cleaned frame returns 400 with a readable message; existing `POST /predict` still works
@@ -51,3 +52,17 @@
   - Acceptance: each successful prediction prepends a row showing distance, traffic, weather and predicted minutes; the list keeps the last 5 and clears on reload
   - Files: frontend/src/components/HistoryList.jsx, frontend/src/App.jsx
   - Notes: React state only — no localStorage, no backend persistence
+
+---
+
+## Discovered during the sprint — deferred, not fixed here
+
+- **Model cannot serve overnight orders or bicycle deliveries** (found in Task 2)
+  - The fitted `preprocessor.joblib` was never trained on `order_time_of_day="after_midnight"`
+    (orders placed 01:00–06:59) or `type_of_vehicle="bicycle"`, even though both occur in the
+    raw dataset. Because the nominal encoder uses `handle_unknown="ignore"`, these do not raise —
+    they become all-zero vectors and the model returns a confident but meaningless number.
+  - v1 works around this by refusing the input at validation time, so no user can reach it.
+  - Real fix belongs in a training sprint: retrain with those categories represented, or set
+    `handle_unknown="error"` so the gap surfaces loudly instead of silently.
+  - Scope note: this is a data/model coverage gap, not a defect in the serving code.
