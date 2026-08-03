@@ -85,3 +85,10 @@ target/
 # Mypy cache
 .mypy_cache/
 /run_information.json
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/.vite/
