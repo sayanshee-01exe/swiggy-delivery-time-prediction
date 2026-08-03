@@ -11,8 +11,15 @@ COPY requirements-docker.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements-docker.txt
 
-COPY . .
+# serve as an unprivileged user rather than root; the app only ever reads
+# from /app, and mlflow/dagshub caches land under the user's home
+RUN useradd --create-home --uid 10001 appuser
 
-EXPOSE 8000
+COPY --chown=appuser:appuser . .
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+USER appuser
+
+# 8001 is this service's port on the shared host; 8000 belongs to another project
+EXPOSE 8001
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]

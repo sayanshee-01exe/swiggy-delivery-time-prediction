@@ -182,7 +182,8 @@ DAGSHUB_REPO_NAME = 'swiggy-delivery-time-prediction'
 TRACKING_URI = (
     f"https://dagshub.com/{DAGSHUB_REPO_OWNER}/{DAGSHUB_REPO_NAME}.mlflow"
 )
-PORT = 8000
+# 8001 is this service's port on the shared host; 8000 belongs to another project
+PORT = 8001
 
 
 class Data(BaseModel):  

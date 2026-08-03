@@ -19,10 +19,11 @@
   - Notes: paths must literally start with `/api/` so the CloudFront behavior maps 1:1 with no origin-path rewriting
   - Completed: 2026-08-03 — 18 integration tests green (83 total). Model loading moved out of import time into a `lifespan` startup hook that records failures instead of raising; this was required by the acceptance criteria, since the old code died on a failed registry load and could never have served `model_loaded: false`. Import dropped from 46s (network) to 1s (none), and tests now run offline against the local artifacts. `/predict` refactored onto the shared `predict_minutes()` helper and still passes. semgrep 290 rules / 0 findings.
 
-- [ ] Task 4: Move the service from port 8000 to port 8001 (P0)
+- [x] Task 4: Move the service from port 8000 to port 8001 (P0)
   - Acceptance: `docker build` + `docker run -p 8001:8001` serves `/api/health` on :8001; nothing in the repo still binds 8000
-  - Files: Dockerfile (`EXPOSE 8001`, `CMD ... --port 8001`), app.py (`uvicorn.run(..., port=8001)`), deploy/scripts/start_docker.sh (`-p 8001:8001`)
+  - Files: Dockerfile, app.py, deploy/scripts/start_docker.sh, scripts/sample_predictions.py, .dockerignore (new), tests/unit/test_deployment_config.py (new)
   - Notes: this frees port 8000 for the other project on the same EC2 instance
+  - Completed: 2026-08-03 — 9 config tests + verified for real: image built, container ran as `uid=10001(appuser)`, `/api/health` answered on :8001. `scripts/sample_predictions.py` also hardcoded 8000 and was missed by the original task description. Added `.dockerignore` (build context 2.3 GB → ~300 MB; was shipping `.venv`, `frontend/node_modules` and any local `.env` into the image) and a non-root `USER` to clear a blocking semgrep finding. 92 tests green, semgrep 299 rules / 0 findings.
 
 - [ ] Task 5: Build the responsive prediction form (P0)
   - Acceptance: all 10 controls render with the exact allowed values from the PRD; single column below `sm`, two columns above `md`; no horizontal scroll at 360px width; HTML input bounds mirror the Pydantic bounds
@@ -67,3 +68,13 @@
   - Real fix belongs in a training sprint: retrain with those categories represented, or set
     `handle_unknown="error"` so the gap surfaces loudly instead of silently.
   - Scope note: this is a data/model coverage gap, not a defect in the serving code.
+
+- **`dagshub.init()` blocks on interactive OAuth when the token is missing** (found in Task 4)
+  - Observed while running the built image with no `DAGSHUB_USER_TOKEN`: startup printed an
+    "AUTHORIZATION REQUIRED" OAuth URL and sat there for roughly two minutes before giving up,
+    after which the app came up degraded and served `/api/health` correctly.
+  - Production passes the token from SSM, so the happy path is unaffected; the risk is a wrong or
+    expired token turning a deploy into a multi-minute stall. CodeDeploy's `ApplicationStart`
+    timeout is 300s, so it currently fits — but only just.
+  - Suggested fix: assert `DAGSHUB_USER_TOKEN` is set before calling `dagshub.init()` and fail
+    fast with a clear error instead of entering the OAuth flow inside a container.

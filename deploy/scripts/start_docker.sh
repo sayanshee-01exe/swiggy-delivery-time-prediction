@@ -36,7 +36,7 @@ echo "Starting new container..."
 
 docker run -d \
   --name delivery_time_pred \
-  -p 8000:8000 \
+  -p 8001:8001 \
   -e DAGSHUB_USER_TOKEN="$DAGSHUB_USER_TOKEN" \
   "$IMAGE"
 

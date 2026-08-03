@@ -1,0 +1,40 @@
+# The image serves the API only. Without this file `COPY . .` ships a ~2.3 GB
+# build context, including the local virtualenv, the frontend's node_modules
+# and any local .env.
+
+# local environments and secrets
+.venv/
+env/
+.env
+*.egg-info/
+
+# version control and DVC cache
+.git/
+.dvc/cache/
+.dvc/tmp/
+
+# the frontend is deployed to S3/CloudFront, never into this image
+frontend/
+
+# data and notebooks are build-time inputs, not runtime dependencies
+data/
+notebooks/
+reports/
+references/
+docs/
+
+# tests and sprint docs are not needed to serve
+tests/
+sprints/
+.pytest_cache/
+
+# python bytecode
+__pycache__/
+*.py[cod]
+*.so
+
+# editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+*.swp
