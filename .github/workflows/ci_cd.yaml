@@ -163,13 +163,13 @@ jobs:
           aws s3 sync frontend/dist "s3://${{ secrets.SPA_BUCKET }}" --delete
 
 
-      # Without this, viewers keep serving the previous build from cache.
-      - name: Invalidate CloudFront cache
-        if: success() && github.ref == 'refs/heads/main'
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" \
-            --paths "/*"
+      # # Without this, viewers keep serving the previous build from cache.
+      # - name: Invalidate CloudFront cache
+      #   if: success() && github.ref == 'refs/heads/main'
+      #   run: |
+      #     aws cloudfront create-invalidation \
+      #       --distribution-id "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" \
+      #       --paths "/*"
 
 
       # -------------------------
