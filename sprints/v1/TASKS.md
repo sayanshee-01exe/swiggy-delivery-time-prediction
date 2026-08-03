@@ -42,10 +42,12 @@
   - Files: none in-repo (AWS CLI/console); record the bucket name and distribution ID in sprints/v1/NOTES.md
   - Notes: S3 origin private behind OAC as the default behavior; second behavior `/api/*` → EC2 public DNS, **HTTP-only, port 8001**, caching disabled, all HTTP methods allowed, `Origin` + `Content-Type` forwarded. Add SPA fallback: 403/404 → `/index.html` with 200. Open EC2 SG inbound 8001 to prefix list `com.amazonaws.global.cloudfront.origin-facing`
 
-- [ ] Task 8: Extend the GitHub Actions pipeline to build and publish the frontend (P0)
+- [x] Task 8: Extend the GitHub Actions pipeline to build and publish the frontend (P0)
   - Acceptance: a push to `main` builds the SPA, syncs it to S3, and creates a CloudFront invalidation; the existing ECR/CodeDeploy steps still run unchanged
-  - Files: .github/workflows/ci_cd.yaml
+  - Files: .github/workflows/ci_cd.yaml, tests/unit/test_ci_workflow.py (new)
   - Notes: add `actions/setup-node@v4` (Node 20), then `npm ci && npm run build` in `frontend/`, `aws s3 sync frontend/dist s3://<bucket> --delete`, `aws cloudfront create-invalidation --paths "/*"`. Run these in the `us-east-1` credential block; add `CLOUDFRONT_DISTRIBUTION_ID` and `SPA_BUCKET` as repo secrets
+  - Completed: 2026-08-03 — 16 tests parsing the workflow YAML. The publish steps are gated on `refs/heads/main` because the workflow triggers on **every** push, so an ungated `s3 sync --delete` would let any branch overwrite the live site; the build itself stays ungated so branches catch breakage pre-merge. Tests also assert the sync runs *after* the us-east-1 credential block (it would otherwise use ap-southeast-2) and that all seven pre-existing pipeline steps survive.
+  - **Still required before this works**: add the `SPA_BUCKET` and `CLOUDFRONT_DISTRIBUTION_ID` repo secrets, and complete Task 7.
 
 - [x] Task 9: Add the health badge and "Try an example" button (P1)
   - Acceptance: on load the page calls `/api/health` and shows a green "Live" or red "Unavailable" badge; clicking "Try an example" fills every field with a valid sample order that predicts successfully
@@ -72,6 +74,18 @@
   - Real fix belongs in a training sprint: retrain with those categories represented, or set
     `handle_unknown="error"` so the gap surfaces loudly instead of silently.
   - Scope note: this is a data/model coverage gap, not a defect in the serving code.
+
+- **GitHub Actions are pinned to mutable tags, not commit SHAs** (found in Task 8)
+  - semgrep `github-actions-mutable-action-tag` reports 6 blocking findings: `actions/checkout@v4`,
+    `actions/setup-python@v5`, `actions/setup-node@v4`, `aws-actions/configure-aws-credentials@v4`
+    (twice) and `aws-actions/amazon-ecr-login@v2`. Five pre-date this sprint; Task 8 added the
+    sixth following the file's existing convention.
+  - Blast radius is what makes this worth recording: the workflow handles `AWS_ACCESS_KEY_ID`,
+    `AWS_SECRET_ACCESS_KEY` and `DAGSHUB_TOKEN`. If an action author's `v4` tag were moved to a
+    malicious commit, those credentials would be readable by the new code.
+  - Not fixed here deliberately: re-pinning six actions to SHAs is a repo-wide policy change, and
+    a mistyped SHA breaks the pipeline. Recommended follow-up is pinning all six at once plus
+    Dependabot to keep them current.
 
 - **`dagshub.init()` blocks on interactive OAuth when the token is missing** (found in Task 4)
   - Observed while running the built image with no `DAGSHUB_USER_TOKEN`: startup printed an

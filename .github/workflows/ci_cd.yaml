@@ -26,12 +26,35 @@ jobs:
 
 
       # -------------------------
+      # Node setup for the SPA
+      # -------------------------
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+
+      # -------------------------
       # Dependencies
       # -------------------------
       - name: Install Packages
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+
+
+      # -------------------------
+      # Build the frontend
+      # Runs on every branch so a broken build is caught before merge;
+      # only the publish steps below are limited to main.
+      # -------------------------
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
 
 
       # -------------------------
@@ -127,6 +150,26 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+
+
+      # -------------------------
+      # Publish the SPA
+      # Gated on main: the workflow triggers on every push, and an
+      # unconditional sync would let any branch overwrite the live site.
+      # -------------------------
+      - name: Publish frontend to S3
+        if: success() && github.ref == 'refs/heads/main'
+        run: |
+          aws s3 sync frontend/dist "s3://${{ secrets.SPA_BUCKET }}" --delete
+
+
+      # Without this, viewers keep serving the previous build from cache.
+      - name: Invalidate CloudFront cache
+        if: success() && github.ref == 'refs/heads/main'
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*"
 
 
       # -------------------------
