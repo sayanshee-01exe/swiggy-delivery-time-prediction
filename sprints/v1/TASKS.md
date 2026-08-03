@@ -53,10 +53,11 @@
   - Notes: the model is pulled from DagsHub at container startup, so a red badge is a genuine and likely failure mode worth surfacing
   - Completed: 2026-08-03 — 6 e2e tests. The badge has four states, not two: "unreachable" (amber) is kept distinct from "degraded" (red) because "API down" and "API up, model down" need different messages — exactly the split `/api/health` returning 200-on-degraded was designed for. A test asserts the health check never gates the form, so a slow check cannot block a prediction. The example order is asserted to sit inside every API bound. semgrep 0 findings, npm audit 0 vulnerabilities.
 
-- [ ] Task 10: Add session prediction history (P1)
+- [x] Task 10: Add session prediction history (P1)
   - Acceptance: each successful prediction prepends a row showing distance, traffic, weather and predicted minutes; the list keeps the last 5 and clears on reload
-  - Files: frontend/src/components/HistoryList.jsx, frontend/src/App.jsx
+  - Files: frontend/src/components/HistoryList.jsx, frontend/src/App.jsx, frontend/tests/e2e/history.spec.js
   - Notes: React state only — no localStorage, no backend persistence
+  - Completed: 2026-08-03 — 8 e2e tests covering ordering, the 5-row cap evicting the oldest, failed predictions not being recorded, clearing on reload, and no overflow at 360px. React state only, as specified. Production build 152 kB JS / 15 kB CSS. semgrep 0 findings, npm audit 0 vulnerabilities.
 
 ---
 

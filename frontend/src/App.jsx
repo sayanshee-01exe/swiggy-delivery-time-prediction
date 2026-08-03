@@ -2,8 +2,13 @@ import { useEffect, useState } from 'react';
 import PredictionForm from './components/PredictionForm';
 import ResultCard from './components/ResultCard';
 import HealthBadge from './components/HealthBadge';
+import HistoryList from './components/HistoryList';
 import { predict, health } from './api';
 import { DEFAULT_ORDER, EXAMPLE_ORDER } from './constants';
+
+// Kept in React state only: the list is per-session by design and clears on
+// reload. Nothing is persisted client-side or server-side.
+const HISTORY_LIMIT = 5;
 
 export default function App() {
   const [order, setOrder] = useState(DEFAULT_ORDER);
@@ -12,6 +17,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [healthState, setHealthState] = useState('loading');
   const [healthDetail, setHealthDetail] = useState('');
+  const [history, setHistory] = useState([]);
 
   // Fired once on mount. Deliberately does not gate the form: a slow or
   // failed health check should never stop someone from trying a prediction.
@@ -41,6 +47,19 @@ export default function App() {
     try {
       const { prediction_minutes } = await predict(order);
       setMinutes(prediction_minutes);
+      // only successful predictions are recorded
+      setHistory((previous) =>
+        [
+          {
+            id: `${Date.now()}-${previous.length}`,
+            distance_km: order.distance_km,
+            traffic: order.traffic,
+            weather: order.weather,
+            minutes: prediction_minutes,
+          },
+          ...previous,
+        ].slice(0, HISTORY_LIMIT)
+      );
     } catch (err) {
       setError(err.message);
       setMinutes(null);
@@ -102,6 +121,8 @@ export default function App() {
         )}
 
         {minutes !== null && !error && <ResultCard minutes={minutes} />}
+
+        <HistoryList entries={history} />
       </main>
     </div>
   );
