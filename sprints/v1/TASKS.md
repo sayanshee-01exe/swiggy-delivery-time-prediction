@@ -25,10 +25,11 @@
   - Notes: this frees port 8000 for the other project on the same EC2 instance
   - Completed: 2026-08-03 — 9 config tests + verified for real: image built, container ran as `uid=10001(appuser)`, `/api/health` answered on :8001. `scripts/sample_predictions.py` also hardcoded 8000 and was missed by the original task description. Added `.dockerignore` (build context 2.3 GB → ~300 MB; was shipping `.venv`, `frontend/node_modules` and any local `.env` into the image) and a non-root `USER` to clear a blocking semgrep finding. 92 tests green, semgrep 299 rules / 0 findings.
 
-- [ ] Task 5: Build the responsive prediction form (P0)
+- [x] Task 5: Build the responsive prediction form (P0)
   - Acceptance: all 10 controls render with the exact allowed values from the PRD; single column below `sm`, two columns above `md`; no horizontal scroll at 360px width; HTML input bounds mirror the Pydantic bounds
-  - Files: frontend/src/components/PredictionForm.jsx, frontend/src/constants.js
+  - Files: frontend/src/components/PredictionForm.jsx, frontend/src/constants.js, frontend/tests/e2e/form.spec.js
   - Notes: `city_type` option value is `metropolitian` (dataset spelling), not `metropolitan`
+  - Completed: 2026-08-03 — 13 controls (the PRD's field table has more than the 10 estimated here). 18 e2e tests assert each select's options equal the accepted values exactly and each number input's min/max mirrors the pydantic bounds, so the two cannot drift. Layout verified by bounding box: side by side at 1280px, stacked at 360px. semgrep 0 findings, npm audit 0 vulnerabilities.
 
 - [ ] Task 6: Wire form submission to the API and render the result card (P0)
   - Acceptance: submitting POSTs to `/api/predict` and shows the predicted minutes; button disables and shows a spinner while in flight; a failed request shows the server's error text instead of a blank screen

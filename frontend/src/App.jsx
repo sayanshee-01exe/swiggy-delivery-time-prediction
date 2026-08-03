@@ -1,4 +1,10 @@
+import { useState } from 'react';
+import PredictionForm from './components/PredictionForm';
+import { DEFAULT_ORDER } from './constants';
+
 export default function App() {
+  const [order, setOrder] = useState(DEFAULT_ORDER);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
@@ -13,14 +19,12 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        <section
-          data-testid="app-shell"
-          className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <p className="text-slate-600">
-            The prediction form arrives in Task 5.
-          </p>
-        </section>
+        <PredictionForm
+          values={order}
+          onChange={setOrder}
+          onSubmit={() => {}}
+          busy={false}
+        />
       </main>
     </div>
   );
