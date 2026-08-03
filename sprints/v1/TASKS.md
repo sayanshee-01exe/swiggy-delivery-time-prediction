@@ -1,6 +1,6 @@
 # Sprint v1 — Tasks
 
-## Status: In Progress
+## Status: 9 of 10 complete — Task 7 blocked on AWS credentials (see NOTES.md)
 
 - [x] Task 1: Scaffold the React frontend with Vite + Tailwind in `frontend/` (P0)
   - Acceptance: `cd frontend && npm run dev` serves a page on :5173 with a Tailwind-styled heading; `npm run build` emits `frontend/dist/`
@@ -37,10 +37,13 @@
   - Notes: in production the API is same-origin, so fetch `/api/predict` relative — do not hardcode a host
   - Completed: 2026-08-03 — 7 e2e tests covering success, in-flight disable, 503, 422 field messages, network abort and error-clearing. `api.js` translates pydantic's 422 list into readable `field: message` text and converts a fetch rejection into a sentence rather than "TypeError: Failed to fetch". Verified beyond the mocks against the real backend through the Vite proxy: 14.2 min clear vs 31.1 min stormy/jam/festival, and a live browser run rendering 21 minutes on both desktop and mobile. semgrep 0 findings, npm audit 0 vulnerabilities.
 
-- [ ] Task 7: Provision the S3 bucket and CloudFront distribution with two origins (P0)
+- [ ] Task 7: Provision the S3 bucket and CloudFront distribution with two origins (P0) — **BLOCKED**
   - Acceptance: the CloudFront domain serves the React app over HTTPS, and `curl https://<domain>/api/health` returns the health JSON from EC2
-  - Files: none in-repo (AWS CLI/console); record the bucket name and distribution ID in sprints/v1/NOTES.md
+  - Files: deploy/provision_frontend.sh (new); record the bucket name and distribution ID in sprints/v1/NOTES.md
   - Notes: S3 origin private behind OAC as the default behavior; second behavior `/api/*` → EC2 public DNS, **HTTP-only, port 8001**, caching disabled, all HTTP methods allowed, `Origin` + `Content-Type` forwarded. Add SPA fallback: 403/404 → `/index.html` with 200. Open EC2 SG inbound 8001 to prefix list `com.amazonaws.global.cloudfront.origin-facing`
+  - **Blocked 2026-08-03**: the configured credentials (`arn:aws:iam::241077340105:user/sayan-dvc-user`) are denied `cloudfront:ListDistributions`, `ec2:DescribeInstances`, `ec2:DescribeSecurityGroups` and `iam:*` — the user is scoped to DVC/ECR. Provisioning needs an administrative profile.
+  - Prepared instead: `deploy/provision_frontend.sh`, an idempotent script covering all five steps. Its embedded CloudFront config was parsed and asserted correct (2 origins, default → S3, `/api/*` → EC2:8001 http-only, all 7 methods, SPA 403/404 fallback), but it has **not been executed against AWS**.
+  - Also still needed once run: open the instance security group to port 8001 for the CloudFront origin-facing prefix list, and set the `SPA_BUCKET` / `CLOUDFRONT_DISTRIBUTION_ID` repo secrets that Task 8 consumes.
 
 - [x] Task 8: Extend the GitHub Actions pipeline to build and publish the frontend (P0)
   - Acceptance: a push to `main` builds the SPA, syncs it to S3, and creates a CloudFront invalidation; the existing ECR/CodeDeploy steps still run unchanged
